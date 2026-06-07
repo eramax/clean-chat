@@ -1,0 +1,282 @@
+---
+import '../styles/chat.css';
+import faviconSvg from '../../public/favicon.svg?raw';
+const faviconB64 = Buffer.from(faviconSvg).toString('base64');
+const faviconHref = `data:image/svg+xml;base64,${faviconB64}`;
+---
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clean Chat</title>
+<link rel="icon" type="image/svg+xml" href={faviconHref}>
+<link rel="preconnect" href="https://rsms.me/">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<style is:global>
+@font-face { font-family: 'Inter Variable'; font-weight: 100 900; font-display: swap; src: url('https://rsms.me/inter/font-files/InterVariable.woff2?v=4.0') format('woff2'); }
+.font-fallback { font-family: 'Inter Variable', 'Inter', system-ui, sans-serif; }
+</style>
+</head>
+<body class="flex h-screen font-fallback">
+
+<!-- Sidebar -->
+<aside id="sidebar">
+  <div class="flex items-center gap-2 p-4" style="display:flex;align-items:center;gap:8px;padding:16px;">
+    <div class="w-[34px] h-[34px] rounded-full flex items-center justify-center text-white font-bold text-sm" style="background: var(--primary);">C</div>
+    <span class="font-semibold text-[19px] tracking-tight">Clean Chat</span>
+    <span class="text-[8px] border px-1 rounded" style="border-color: var(--border); color: var(--muted);">Beta</span>
+    <div style="flex: 1;"></div>
+    <button class="burger-btn" onclick="toggleSidebar()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+  </div>
+
+  <div class="px-3 space-y-0.5">
+    <button class="sidebar-item" onclick="newChat()" data-tooltip="Ctrl+Shift+O">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      New chat
+    </button>
+  </div>
+
+  <div class="px-3 mt-3">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="search-input" class="search-input" placeholder="Search chats (Ctrl+K)" oninput="filterRecents(this.value)">
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-y-auto px-3 mt-3">
+    <div id="recents-list" class="space-y-0.5"></div>
+  </div>
+
+  <div class="p-3 flex items-center justify-between" style="border-top: 1px solid var(--border-soft);">
+    <div class="flex items-center gap-2 px-1.5">
+      <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style="background: var(--card);">U</div>
+      <span class="text-sm">User</span>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()" data-tooltip="Toggle theme">
+      <svg id="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="flex-1 flex flex-col min-w-0 relative">
+  <!-- Top bar -->
+  <div class="top-bar relative z-20">
+    <button id="topbar-burger" class="burger-btn" onclick="toggleSidebar()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="flex items-center gap-2 min-w-0 flex-1">
+      <div class="relative">
+        <button id="model-btn" class="model-btn" onclick="toggleModelDropdown()">
+          <div id="model-dot" class="w-2 h-2 rounded-full bg-[#555]"></div>
+          <span id="model-label" class="font-medium text-[15px] whitespace-nowrap">Select model</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div id="model-dropdown" class="model-dropdown hidden">
+          <div class="model-dropdown-search">
+            <div class="search-wrap">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input id="model-search" class="search-input" placeholder="Search models..." oninput="filterModelDropdown(this.value)">
+            </div>
+          </div>
+          <div id="model-list" class="model-dropdown-list"></div>
+          <div style="border-top: 1px solid var(--border); padding: 4px;">
+            <div class="model-dropdown-item" onclick="closeModelDropdown();openAllModelsModal()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="8"/></svg>
+              Fetch all models...
+            </div>
+            <div class="model-dropdown-item" onclick="openModal()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68 1.65 1.65 0 0 0 10 3.17V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Configure servers...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="token-badge" data-tooltip="Approximate token usage">
+        <span id="token-text">0</span>
+        <div class="progress"><div class="progress-fill" id="token-fill" style="width: 0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="absolute top-0 left-0 right-0 h-6 z-10 pointer-events-none" style="background: linear-gradient(to bottom, var(--bg), transparent);"></div>
+
+  <div id="messages" class="messages-area" onscroll="onMessagesScroll()">
+    <div id="welcome" class="welcome-container">
+      <div class="flex items-center gap-[15px] mb-2">
+        <div class="text-[44px] -translate-y-[2px]">🦥</div>
+        <h1 class="welcome-title">How can I help you today?</h1>
+      </div>
+      <div class="suggested-prompts">
+        <button class="suggested-prompt" onclick="usePrompt(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Search the latest news</button>
+        <button class="suggested-prompt" onclick="usePrompt(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>Write a Python function</button>
+        <button class="suggested-prompt" onclick="usePrompt(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>Explain a concept</button>
+        <button class="suggested-prompt" onclick="usePrompt(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Summarize a document</button>
+      </div>
+    </div>
+  </div>
+
+  <button id="autoscroll-btn" class="autoscroll-btn" onclick="scrollToBottom()" data-tooltip="Scroll to bottom">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+  </button>
+
+  <div class="composer-fade"></div>
+  <div class="composer-dock">
+    <div class="composer-surface">
+      <div class="composer-inner">
+        <div class="composer-input-wrap">
+          <textarea id="input" class="chat-input" placeholder="Ask anything... (paste files, drop files, or click +)" rows="1"></textarea>
+        </div>
+        <div id="attachments-strip" class="hidden flex-wrap gap-2 px-1 pb-1"></div>
+        <div class="composer-bottom">
+          <button id="upload-btn" class="plus-btn" data-tooltip="Attach files">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <input id="file-input" type="file" multiple class="hidden" />
+          <button id="search-pill" class="pill-btn" data-active="false" data-tooltip="Allow web search" onclick="togglePill('search')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Search</span>
+          </button>
+          <button id="code-pill" class="pill-btn" data-active="false" data-tooltip="Execute code" onclick="togglePill('code')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+            <span>Code</span>
+          </button>
+          <button id="thinking-pill" class="pill-btn" data-active="false" data-tooltip="Show reasoning" onclick="togglePill('thinking')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
+            <span>Thinking</span>
+          </button>
+          <div style="flex: 1;"></div>
+          <button class="icon-btn" style="width:30px;height:30px;border-radius:8px;" data-tooltip="Dictate">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/></svg>
+          </button>
+          <button id="send-btn" class="send-btn ml-1" disabled data-tooltip="Send (Enter)">
+            <svg id="send-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="text-center text-[11px] mt-2" style="color: var(--muted);">LLMs can make mistakes. Verify important info. · <span style="color: var(--primary); cursor: pointer;" onclick="exportConv()">Export</span></div>
+  </div>
+</main>
+
+<!-- Settings Modal -->
+<div id="settings-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeModal()">
+  <div class="modal-card">
+    <div class="flex items-center justify-between p-4" style="border-bottom: 1px solid var(--border);">
+      <div>
+        <h2 class="text-base font-semibold">Configure AI Servers</h2>
+        <p class="text-xs mt-0.5" style="color: var(--muted);">OpenAI-compatible endpoints (OpenAI, Ollama, vLLM, etc.)</p>
+      </div>
+      <button class="icon-btn" style="width:30px;height:30px;border-radius:8px;" onclick="closeModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-4 overflow-y-auto" style="max-height: 35vh;">
+      <div class="text-xs font-medium mb-2" style="color: var(--muted);">CONFIGURED SERVERS</div>
+      <div id="server-list" class="space-y-2">
+        <div class="text-sm text-center py-6" style="color: var(--muted);">No servers yet. Add one below.</div>
+      </div>
+    </div>
+    <div class="p-4" style="border-top: 1px solid var(--border);">
+      <div class="text-xs font-medium mb-3" style="color: var(--muted);" id="form-title">ADD NEW SERVER</div>
+      <div class="space-y-3">
+        <div>
+          <label class="form-label">Display Name</label>
+          <input id="srv-name" class="form-input" placeholder="e.g., OpenAI, Local Ollama">
+        </div>
+        <div>
+          <label class="form-label">Base URL</label>
+          <input id="srv-url" class="form-input" placeholder="https://api.openai.com/v1">
+        </div>
+        <div>
+          <label class="form-label">API Key</label>
+          <div style="position: relative;">
+            <input id="srv-key" type="password" class="form-input" style="padding-right: 40px;" placeholder="sk-...">
+            <button type="button" onclick="const i=$('srv-key');i.type=i.type==='password'?'text':'password'" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Default Model <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
+          <div class="flex gap-2" style="display:flex;gap:8px;">
+            <input id="srv-model" class="form-input" style="flex:1;" placeholder="Leave blank to choose later from the chat">
+            <button class="btn btn-ghost" onclick="openModelPicker()" data-tooltip="Browse models on this server">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+            </button>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">You can pick the model later from the chat via "Fetch all models".</div>
+          <div id="model-suggestions" class="hidden" style="margin-top:8px;"></div>
+        </div>
+      </div>
+      <div id="test-result" class="mt-3 text-sm hidden"></div>
+      <div class="flex gap-2 mt-4 justify-end" style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="clearForm()">Clear</button>
+        <button class="btn btn-ghost" onclick="testConnection()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+          Test
+        </button>
+        <button class="btn btn-primary" onclick="saveServer()">Save Server</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Model Picker Modal (inside settings) -->
+<div id="model-picker-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeModelPicker()" style="z-index: 60;">
+  <div class="modal-card" style="max-width: 720px; max-height: 80vh; width: 90vw;">
+    <div class="flex items-center justify-between p-4" style="border-bottom: 1px solid var(--border);">
+      <h2 class="text-base font-semibold">Select Model</h2>
+      <button class="icon-btn" style="width:30px;height:30px;border-radius:8px;" onclick="closeModelPicker()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-3" style="border-bottom: 1px solid var(--border);">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input id="picker-search" class="search-input" placeholder="Filter models..." oninput="filterPicker(this.value)">
+      </div>
+    </div>
+    <div id="picker-list" class="model-dropdown-list" style="max-height: 50vh;"></div>
+  </div>
+</div>
+
+<!-- All Models Modal: fetches from EVERY configured server, shows provider:model -->
+<div id="all-models-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeAllModelsModal()" style="z-index: 60;">
+  <div class="modal-card" style="max-width: 900px; max-height: 85vh; width: 92vw;">
+    <div class="flex items-center justify-between p-4" style="border-bottom: 1px solid var(--border);">
+      <div>
+        <h2 class="text-base font-semibold">All Models</h2>
+        <p class="text-xs mt-0.5" style="color: var(--muted);">Fetched from all configured servers. Click to activate.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-ghost" id="all-models-refresh" onclick="openAllModelsModal()" data-tooltip="Refetch from all servers">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+          Refresh
+        </button>
+        <button class="icon-btn" style="width:30px;height:30px;border-radius:8px;" onclick="closeAllModelsModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="p-3" style="border-bottom: 1px solid var(--border);">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input id="all-models-search" class="search-input" placeholder="Filter by model or provider..." oninput="filterAllModels(this.value)">
+      </div>
+    </div>
+    <div id="all-models-list" class="model-dropdown-list" style="max-height: 65vh; padding: 4px;"></div>
+  </div>
+</div>
+
+<script>
+  import '../scripts/chat.ts';
+</script>
+</body>
+</html>
