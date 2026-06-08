@@ -95,7 +95,7 @@ let currentId: string | null = null;
 let startTime = 0;
 let streamChunks = 0;
 let editingMsgIdx = -1;
-let pendingToolMessageIdx = -1;
+let pendingToolIdxs: number[] = [];
 
 // rAF coalescing for streaming
 let streamRafId: number | null = null;
@@ -974,7 +974,7 @@ async function resendFromIdx(userIdx: number): Promise<void> {
           const query = argsObj?.query || text;
           const toolMsg: SearchToolMessage = { role: 'tool', tool: 'web_search', query, status: 'running', results: [] };
           messages.splice(messages.length - 1, 0, toolMsg);
-          pendingToolMessageIdx = messages.indexOf(toolMsg);
+          pendingToolIdxs.push(messages.indexOf(toolMsg));
           renderMessages();
         } else {
           const label = toolName.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
@@ -982,28 +982,27 @@ async function resendFromIdx(userIdx: number): Promise<void> {
           const inp = a ? JSON.stringify(a).slice(0, 200) : '';
           const toolMsg: GenericToolMessage = { role: 'tool', tool: toolName, label, input: inp, status: 'running', result: '' };
           messages.splice(messages.length - 1, 0, toolMsg);
-          pendingToolMessageIdx = messages.indexOf(toolMsg);
+          pendingToolIdxs.push(messages.indexOf(toolMsg));
           renderMessages();
         }
       },
       (toolName, result) => {
-        if (toolName === 'webSearch' && pendingToolMessageIdx >= 0) {
-          const m = messages[pendingToolMessageIdx];
-          if (m && m.role === 'tool' && m.tool === 'web_search') {
-            const r = result as { results?: SearchResult[] } | undefined;
-            (m as SearchToolMessage).results = r?.results || [];
-            m.status = 'complete';
-            renderMessages();
-          }
-        } else if (pendingToolMessageIdx >= 0) {
-          const m = messages[pendingToolMessageIdx];
-          if (m && m.role === 'tool' && m.tool === toolName) {
-            const r = result as { content?: string } | undefined;
-            (m as GenericToolMessage).result = r?.content || (typeof result === 'string' ? result : JSON.stringify(result, null, 2));
-            m.status = 'complete';
-            renderMessages();
-          }
+        const idx = pendingToolIdxs.findIndex(i => {
+          const m = messages[i];
+          return m && m.role === 'tool' && m.tool === toolName && m.status === 'running';
+        });
+        if (idx < 0) return;
+        const m = messages[pendingToolIdxs[idx]];
+        pendingToolIdxs.splice(idx, 1);
+        if (toolName === 'webSearch') {
+          const r = result as { results?: SearchResult[] } | undefined;
+          (m as SearchToolMessage).results = r?.results || [];
+        } else {
+          const r = result as { content?: string } | undefined;
+          (m as GenericToolMessage).result = r?.content || (typeof result === 'string' ? result : JSON.stringify(result, null, 2));
         }
+        (m as SearchToolMessage | GenericToolMessage).status = 'complete';
+        renderMessages();
       },
       (err) => {
         if (err.name !== 'AbortError') {
@@ -1029,7 +1028,7 @@ async function resendFromIdx(userIdx: number): Promise<void> {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   assistantMsg.timing = `${streamChunks} tok · ${elapsed}s`;
   assistantMsg.status = 'complete';
-  pendingToolMessageIdx = -1;
+  pendingToolIdxs = [];
   saveCurrentConv(true); renderRecents();
   if (streamRafId !== null) { cancelAnimationFrame(streamRafId); streamRafId = null; }
   const lastRow = messagesEl.querySelector(`[data-msg-idx="${messages.length - 1}"]`) as HTMLElement | null;
