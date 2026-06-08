@@ -42,6 +42,23 @@ hljs.registerLanguage('yaml', yaml);
 hljs.registerLanguage('yml', yaml);
 hljs.registerLanguage('shell', shell);
 
+const PROXY = 'https://s.emolike.net/proxy.php';
+
+const IP_RE = /^https?:\/\/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|localhost|\[?[0-9a-f:]+\]?)(:\d+)?\//i;
+
+async function smartFetch(url: string, headers?: Record<string, string>): Promise<Response> {
+  try {
+    const res = await fetch(url, { headers });
+    if (res.ok || (res.status >= 400 && res.status < 500)) return res;
+    throw new Error(`HTTP ${res.status}`);
+  } catch (e: any) {
+    if (IP_RE.test(url)) throw e;
+    return fetch(`${PROXY}?url=${encodeURIComponent(url)}`, {
+      headers: { ...(headers || {}), 'Accept': 'application/json, text/plain, */*' },
+    });
+  }
+}
+
 // === DOM ===
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 const messagesEl = $('messages') as HTMLDivElement;
@@ -55,7 +72,6 @@ const modelDot = $('model-dot') as HTMLDivElement;
 const modelDropdown = $('model-dropdown') as HTMLDivElement;
 const modelListEl = $('model-list') as HTMLDivElement;
 const testResultEl = $('test-result') as HTMLDivElement;
-const modelSuggestionsEl = $('model-suggestions') as HTMLDivElement;
 const autoscrollBtn = $('autoscroll-btn') as HTMLButtonElement;
 const tokenText = $('token-text') as HTMLSpanElement;
 const tokenFill = $('token-fill') as HTMLDivElement;
@@ -79,7 +95,6 @@ let currentId: string | null = null;
 let startTime = 0;
 let streamChunks = 0;
 let editingMsgIdx = -1;
-let pickerModels: string[] = [];
 let pendingToolMessageIdx = -1;
 
 // rAF coalescing for streaming
@@ -159,9 +174,10 @@ function saveSelectedModel(serverIdx: number, model: string): void {
 function updateModelLabel(): void {
   if (activeServer >= 0 && servers[activeServer]) {
     const s = servers[activeServer];
-    const model = s.model || 'Unknown';
     const provider = (s.name || s.baseUrl).toLowerCase();
-    modelLabel.innerHTML = `<span style="color: var(--muted); font-weight: 450;">${esc(provider)}:</span> ${esc(model)}`;
+    modelLabel.innerHTML = s.model
+      ? `<span style="color: var(--muted); font-weight: 450;">${esc(provider)}:</span> ${esc(s.model)}`
+      : `<span style="color: var(--muted); font-weight: 450;">${esc(provider)}</span>`;
     modelDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
   } else {
     modelLabel.textContent = 'Select model';
@@ -169,12 +185,11 @@ function updateModelLabel(): void {
   }
 }
 (window as any).openModal = function (): void { $('settings-modal').classList.remove('hidden'); clearForm(); renderServerList(); modelDropdown.classList.add('hidden'); };
-(window as any).closeModal = function (): void { $('settings-modal').classList.add('hidden'); modelSuggestionsEl.classList.add('hidden'); };
+(window as any).closeModal = function (): void { $('settings-modal').classList.add('hidden'); };
 function clearForm(): void {
   editingIdx = -1;
-  ['srv-name','srv-url','srv-key','srv-model'].forEach(id => ($(id) as HTMLInputElement).value = '');
+  ['srv-name','srv-url','srv-key'].forEach(id => ($(id) as HTMLInputElement).value = '');
   testResultEl.classList.add('hidden');
-  modelSuggestionsEl.classList.add('hidden');
   $('form-title').textContent = 'ADD NEW SERVER';
   ($('srv-key') as HTMLInputElement).type = 'password';
 }
@@ -185,10 +200,9 @@ function renderServerList(): void {
   }
   serverListEl.innerHTML = servers.map((s, i) => `
     <div class="server-row ${i === activeServer ? 'active' : ''}">
-      <div class="radio-dot ${i === activeServer ? 'checked' : ''}" onclick="setActive(${i})"></div>
       <div style="flex:1;min-width:0;cursor:pointer;" onclick="setActive(${i})">
-        <div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name || s.model)}</div>
-        <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(s.model)} · ${esc(s.baseUrl.replace(/^https?:\/\//, ''))}</div>
+        <div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name || s.model || s.baseUrl)}</div>
+        <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(s.baseUrl.replace(/^https?:\/\//, ''))}</div>
       </div>
       <button class="icon-btn" style="width:28px;height:28px;border-radius:8px;" onclick="editServer(${i})" data-tooltip="Edit">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -206,12 +220,11 @@ function renderServerList(): void {
   ($('srv-name') as HTMLInputElement).value = s.name || '';
   ($('srv-url') as HTMLInputElement).value = s.baseUrl || '';
   ($('srv-key') as HTMLInputElement).value = s.apiKey || '';
-  ($('srv-model') as HTMLInputElement).value = s.model || '';
   $('form-title').textContent = 'EDIT SERVER';
   testResultEl.classList.add('hidden');
 };
 (window as any).deleteServer = function (i: number): void {
-  if (!confirm(`Delete "${servers[i].name || servers[i].model}"?`)) return;
+  if (!confirm(`Delete "${servers[i].name || servers[i].baseUrl}"?`)) return;
   servers.splice(i, 1);
   if (activeServer >= servers.length) activeServer = servers.length - 1;
   if (activeServer < 0 && servers.length > 0) activeServer = 0;
@@ -221,12 +234,11 @@ function renderServerList(): void {
   renderModelDropdown();
 };
 (window as any).saveServer = function (): void {
-  const name = ($('srv-name') as HTMLInputElement).value.trim() || ($('srv-model') as HTMLInputElement).value.trim() || ($('srv-url') as HTMLInputElement).value.trim();
+  const name = ($('srv-name') as HTMLInputElement).value.trim() || ($('srv-url') as HTMLInputElement).value.trim();
   const baseUrl = ($('srv-url') as HTMLInputElement).value.trim().replace(/\/$/, '');
   const apiKey = ($('srv-key') as HTMLInputElement).value.trim();
-  const model = ($('srv-model') as HTMLInputElement).value.trim();
   if (!baseUrl) { showTestResult('Base URL is required.', false); return; }
-  const server: Server = { name, baseUrl, apiKey, model };
+  const server: Server = { name, baseUrl, apiKey };
   if (editingIdx >= 0) { servers[editingIdx] = server; if (activeServer === editingIdx) updateModelLabel(); }
   else { servers.push(server); if (activeServer < 0) activeServer = 0; }
   saveServers();
@@ -234,21 +246,19 @@ function renderServerList(): void {
   renderServerList();
   renderModelDropdown();
   clearForm();
-  showTestResult('✓ Server saved', true, 1500);
+  (window as any).closeModal();
 };
 (window as any).testConnection = async function (): Promise<void> {
   const baseUrl = ($('srv-url') as HTMLInputElement).value.trim().replace(/\/$/, '');
   const apiKey = ($('srv-key') as HTMLInputElement).value.trim();
-  const model = ($('srv-model') as HTMLInputElement).value.trim();
   if (!baseUrl) { showTestResult('Enter a Base URL first.', false); return; }
   showTestResult('<div class="spinner"></div> Testing...', true);
   try {
-    const res = await fetch(baseUrl + '/models', { headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : undefined });
+    const res = await smartFetch(baseUrl + '/models', apiKey ? { 'Authorization': `Bearer ${apiKey}` } : undefined);
     if (res.ok) {
       const data = await res.json();
       const models = data.data || data.models || [];
-      const found = models.find((m: any) => (m.id || m.name) === model);
-      showTestResult(`<span style="color: var(--primary);">✓ Connected</span> · ${models.length} models${found ? '' : (model ? ` · <span style="color:#e0a020;">⚠ "${esc(model)}" not listed</span>` : '')}`, true, 0);
+      showTestResult(`<span style="color: var(--primary);">✓ Connected</span> · ${models.length} models`, true, 0);
     } else showTestResult(`<span style="color:#e74c3c;">✗ Error ${res.status}</span>`, true, 0);
   } catch (e: any) { showTestResult(`<span style="color:#e74c3c;">✗ ${esc(e.message)}</span>`, true, 0); }
 };
@@ -256,44 +266,6 @@ function showTestResult(html: string, show: boolean, hideAfter = 0): void {
   testResultEl.innerHTML = html; testResultEl.classList.toggle('hidden', !show);
   if (hideAfter > 0) setTimeout(() => testResultEl.classList.add('hidden'), hideAfter);
 }
-
-// Model picker modal
-(window as any).openModelPicker = async function (): Promise<void> {
-  const baseUrl = ($('srv-url') as HTMLInputElement).value.trim().replace(/\/$/, '');
-  const apiKey = ($('srv-key') as HTMLInputElement).value.trim();
-  if (!baseUrl) { showTestResult('Enter a Base URL first.', false); return; }
-  ($('picker-search') as HTMLInputElement).value = '';
-  $('model-picker-modal').classList.remove('hidden');
-  $('picker-list').innerHTML = '<div class="model-dropdown-empty"><div class="spinner"></div> Loading models...</div>';
-  try {
-    const res = await fetch(baseUrl + '/models', { headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : undefined });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    pickerModels = (data.data || data.models || []).map((m: any) => m.id || m.name).filter(Boolean);
-    renderPickerList(pickerModels);
-  } catch (e: any) {
-    $('picker-list').innerHTML = `<div class="model-dropdown-empty" style="color:#e74c3c;">Failed: ${esc(e.message)}</div>`;
-  }
-  setTimeout(() => ($('picker-search') as HTMLInputElement).focus(), 100);
-};
-(window as any).closeModelPicker = function (): void { $('model-picker-modal').classList.add('hidden'); };
-function renderPickerList(models: string[]): void {
-  if (!models.length) {
-    $('picker-list').innerHTML = '<div class="model-dropdown-empty">No models found</div>';
-    return;
-  }
-  $('picker-list').innerHTML = models.map(m => `
-    <div class="model-dropdown-item" onclick="selectModel('${esc(m)}')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(m)}</span>
-    </div>
-  `).join('');
-}
-(window as any).selectModel = function (m: string): void { ($('srv-model') as HTMLInputElement).value = m; (window as any).closeModelPicker(); };
-(window as any).filterPicker = function (q: string): void {
-  const query = q.toLowerCase();
-  renderPickerList(pickerModels.filter(m => m.toLowerCase().includes(query)));
-};
 
 // Model dropdown
 (window as any).toggleModelDropdown = function (): void {
@@ -309,7 +281,7 @@ function renderModelDropdown(): void {
     return;
   }
   const q = ($('model-search') as HTMLInputElement).value.toLowerCase();
-  const filtered = servers.filter(s => (s.name || s.model).toLowerCase().includes(q) || s.model.toLowerCase().includes(q));
+  const filtered = servers.filter(s => (s.name || s.baseUrl).toLowerCase().includes(q));
   if (!filtered.length) {
     modelListEl.innerHTML = '<div class="model-dropdown-empty">No matches</div>';
     return;
@@ -317,10 +289,9 @@ function renderModelDropdown(): void {
   modelListEl.innerHTML = filtered.map(s => {
     const i = servers.indexOf(s);
     return `<div class="model-dropdown-item ${i === activeServer ? 'selected' : ''}" onclick="setActive(${i})">
-      <div class="radio-dot ${i === activeServer ? 'checked' : ''}"></div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name || s.model)}</div>
-        <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(s.model)}</div>
+        <div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name || s.baseUrl)}</div>
+        <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(s.baseUrl.replace(/^https?:\/\//, ''))}</div>
       </div>
     </div>`;
   }).join('');
@@ -342,7 +313,7 @@ let allModelsCache: AllModelsEntry[] = [];
   const results = await Promise.allSettled(servers.map(async (s, i) => {
     const url = s.baseUrl.replace(/\/$/, '') + '/models';
     const headers = s.apiKey ? { 'Authorization': `Bearer ${s.apiKey}` } : undefined;
-    const res = await fetch(url, { headers });
+    const res = await smartFetch(url, headers);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const models = (data.data || data.models || []).map((m: any) => m.id || m.name).filter(Boolean);

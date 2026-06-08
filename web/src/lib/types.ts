@@ -2,7 +2,7 @@ export interface Server {
   name: string;
   baseUrl: string;
   apiKey: string;
-  model: string;
+  model?: string;
 }
 
 export type MessageRole = 'user' | 'assistant' | 'tool';

@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   output: 'static',
-  site: 'https://clean-chat.pages.dev',
+  site: 'https://chat.emolike.net',
   build: {
     assets: 'assets',
   },

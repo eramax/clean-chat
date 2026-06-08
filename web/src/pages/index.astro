@@ -203,17 +203,6 @@ const faviconHref = `data:image/svg+xml;base64,${faviconB64}`;
             </button>
           </div>
         </div>
-        <div>
-          <label class="form-label">Default Model <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
-          <div class="flex gap-2" style="display:flex;gap:8px;">
-            <input id="srv-model" class="form-input" style="flex:1;" placeholder="Leave blank to choose later from the chat">
-            <button class="btn btn-ghost" onclick="openModelPicker()" data-tooltip="Browse models on this server">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-            </button>
-          </div>
-          <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">You can pick the model later from the chat via "Fetch all models".</div>
-          <div id="model-suggestions" class="hidden" style="margin-top:8px;"></div>
-        </div>
       </div>
       <div id="test-result" class="mt-3 text-sm hidden"></div>
       <div class="flex gap-2 mt-4 justify-end" style="display:flex;gap:8px;justify-content:flex-end;">
@@ -225,25 +214,6 @@ const faviconHref = `data:image/svg+xml;base64,${faviconB64}`;
         <button class="btn btn-primary" onclick="saveServer()">Save Server</button>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- Model Picker Modal (inside settings) -->
-<div id="model-picker-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeModelPicker()" style="z-index: 60;">
-  <div class="modal-card" style="max-width: 720px; max-height: 80vh; width: 90vw;">
-    <div class="flex items-center justify-between p-4" style="border-bottom: 1px solid var(--border);">
-      <h2 class="text-base font-semibold">Select Model</h2>
-      <button class="icon-btn" style="width:30px;height:30px;border-radius:8px;" onclick="closeModelPicker()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div class="p-3" style="border-bottom: 1px solid var(--border);">
-      <div class="search-wrap">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input id="picker-search" class="search-input" placeholder="Filter models..." oninput="filterPicker(this.value)">
-      </div>
-    </div>
-    <div id="picker-list" class="model-dropdown-list" style="max-height: 50vh;"></div>
   </div>
 </div>
 
