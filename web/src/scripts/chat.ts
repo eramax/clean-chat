@@ -1150,8 +1150,8 @@ document.addEventListener('keydown', e => {
   if (mod && e.key === 'k') { e.preventDefault(); ($('search-input') as HTMLInputElement).focus(); }
   if (mod && e.key === 'b') { e.preventDefault(); (window as any).toggleSidebar(); }
   if (e.key === 'Escape') {
-    if (!$('model-picker-modal').classList.contains('hidden')) (window as any).closeModelPicker();
-    else if (!$('settings-modal').classList.contains('hidden')) (window as any).closeModal();
+    if (!$('settings-modal').classList.contains('hidden')) (window as any).closeModal();
+    else if (!$('all-models-modal').classList.contains('hidden')) (window as any).closeAllModelsModal();
     else if (generating && activeStreamAbort) activeStreamAbort();
   }
 });
